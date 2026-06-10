@@ -6,7 +6,7 @@ from loguru import logger
 
 from shared.config import settings
 from shared.constants import CANDLES_KEY, READY_KEY, TF_5M, TF_15M, TF_1H, MEXC_INTERVAL_MAP
-from services.collector.mexc_rest import get_historical_klines, _get_proxy
+from services.collector.mexc_rest import get_historical_klines
 
 TIMEFRAMES = {
     TF_5M:  settings.candles_5min_buffer,
