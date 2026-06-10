@@ -7,7 +7,7 @@ MEXC_REST_URL = "https://api.mexc.com"
 
 
 async def get_all_usdt_symbols(session: aiohttp.ClientSession) -> list[str]:
-    """Получает список всех активных USDT торговых пар с MEXC."""
+    """Fetches a list of all active USDT trading pairs from MEXC."""
     url = f"{MEXC_REST_URL}/api/v3/exchangeInfo"
     logger.info("Fetching all USDT symbols from MEXC...")
 
@@ -32,10 +32,10 @@ async def get_historical_klines(
     limit: int = 200,
 ) -> list[dict]:
     """
-    Получает исторические свечи для одного символа.
+    Fetches historical candles for a single symbol.
 
     interval: "1m", "5m", "15m", "1h"
-    limit: количество свечей (максимум 1000)
+    limit: number of candles (maximum 1000)
     """
     url = f"{MEXC_REST_URL}/api/v3/klines"
     params = {"symbol": symbol, "interval": interval, "limit": limit}
@@ -44,7 +44,7 @@ async def get_historical_klines(
         response.raise_for_status()
         data = await response.json()
 
-    # MEXC возвращает список списков:
+    # MEXC returns a list of lists:
     # [timestamp, open, high, low, close, volume, ...]
     candles = []
     for item in data:

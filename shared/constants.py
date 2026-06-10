@@ -20,3 +20,9 @@ STREAM_CHART_READY = "stream:chart_ready"      # chart_builder → notifier
 TF_5M = "5m"
 TF_15M = "15m"
 TF_1H = "1h"
+
+MEXC_INTERVAL_MAP = {
+    TF_5M:  "5m",
+    TF_15M: "15m",
+    TF_1H:  "60m",
+}
