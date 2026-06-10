@@ -49,6 +49,30 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      
+  collector:
+    build:
+      context: .
+      dockerfile: services/collector/Dockerfile
+    container_name: mexc_collector
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=postgres
+      - MINIO_HOST=minio
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - mexc_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   redis_data:
