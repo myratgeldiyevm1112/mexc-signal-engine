@@ -74,8 +74,7 @@ async def _handle_connection(symbols: list[str], conn_id: int) -> None:
     while True:
         try:
             logger.info(f"[WS-{conn_id}] Connecting for {len(symbols)} symbols...")
-            proxy = settings.http_proxy or None
-            async with websockets.connect(MEXC_WS_URL, ping_interval=None, proxy=proxy) as ws:
+            async with websockets.connect(MEXC_WS_URL, ping_interval=None) as ws:
                 # Subscribe to all symbols in this batch
                 await ws.send(json.dumps(_build_subscribe_msg(symbols)))
                 logger.info(f"[WS-{conn_id}] Subscribed, listening...")

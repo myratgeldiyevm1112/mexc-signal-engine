@@ -5,20 +5,12 @@ from shared.config import settings
 MEXC_REST_URL = "https://api.mexc.com"
 
 
-def _get_connector() -> aiohttp.TCPConnector | None:
-    return None
-
-
-def _get_proxy() -> str | None:
-    return settings.http_proxy or None
-
-
 async def get_all_usdt_symbols(session: aiohttp.ClientSession) -> list[str]:
     """Fetch all active USDT trading pairs from MEXC."""
     url = f"{MEXC_REST_URL}/api/v3/exchangeInfo"
     logger.info("Fetching all USDT symbols from MEXC...")
 
-    async with session.get(url, proxy=_get_proxy()) as response:
+    async with session.get(url) as response:
         response.raise_for_status()
         data = await response.json()
 
@@ -41,7 +33,7 @@ async def get_historical_klines(
     url = f"{MEXC_REST_URL}/api/v3/klines"
     params = {"symbol": symbol, "interval": interval, "limit": limit}
 
-    async with session.get(url, params=params, proxy=_get_proxy()) as response:
+    async with session.get(url, params=params) as response:
         response.raise_for_status()
         data = await response.json()
 

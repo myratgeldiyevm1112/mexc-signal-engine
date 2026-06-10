@@ -62,7 +62,6 @@ class Settings(BaseSettings):
     # Environment
     env: str = "development"
     log_level: str = "INFO"
-    http_proxy: str = ""
 
 
 # A single instance — imported across all services
