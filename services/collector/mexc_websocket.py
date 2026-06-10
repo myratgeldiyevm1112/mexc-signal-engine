@@ -105,7 +105,7 @@ async def _handle_connection(symbols: list[str], conn_id: int) -> None:
                     await pipe.execute()
 
         except Exception as e:
-            logger.warning(f"[WS-{conn_id}] Disconnected: {e}. Retrying in {delay}s...")
+            logger.warning(f"[WS-{conn_id}] Disconnected: {type(e).__name__}: {e}. Retrying in {delay}s...")
             await asyncio.sleep(delay)
             delay = min(delay * 2, RECONNECT_DELAY_MAX)
         finally:
