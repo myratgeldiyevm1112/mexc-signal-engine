@@ -17,7 +17,6 @@ TOP_MOVERS_COUNT = 5
 
 async def analyze_all_symbols(redis, pool) -> None:
     """Run filters for all symbols that have data in Redis."""
-    # Get all ready symbols
     keys = await redis.keys("ready:*")
     symbols = [k.replace("ready:", "") for k in keys]
 
@@ -26,30 +25,37 @@ async def analyze_all_symbols(redis, pool) -> None:
         return
 
     signals_found = 0
-    movers: list[tuple[str, float]] = []  # (symbol, change_15m)
+    movers: list[tuple[str, float]] = []
 
-    for symbol in symbols:
-        # Skip if on cooldown
+    async def process_symbol(symbol):
         if await is_on_cooldown(redis, symbol):
-            continue
-
+            return None, None
         result = await check_filters(redis, symbol)
         if result is None:
-            # Lightweight check for top-movers debug log
             change_15m = await get_change_15m(redis, symbol)
-            if change_15m is not None:
-                movers.append((symbol, change_15m))
-            continue
+            return None, (symbol, change_15m) if change_15m is not None else None
+        return symbol, result
 
-        # Get current price
-        key = CANDLES_KEY.format(symbol=symbol, timeframe=TF_15M)
-        last = await redis.lindex(key, -1)
-        if not last:
-            continue
-        price = json.loads(last)["close"]
+    # Батчами по 200 чтобы не перегружать Redis
+    batch_size = 200
+    results = []
+    for i in range(0, len(symbols), batch_size):
+        batch = symbols[i:i + batch_size]
+        tasks = [process_symbol(s) for s in batch]
+        batch_results = await asyncio.gather(*tasks)
+        results.extend(batch_results)
 
-        await save_and_publish_signal(redis, pool, symbol, price, result)
-        signals_found += 1
+    for sym, data in results:
+        if sym is not None:
+            key = CANDLES_KEY.format(symbol=sym, timeframe=TF_15M)
+            last = await redis.lindex(key, -1)
+            if not last:
+                continue
+            price = json.loads(last)["close"]
+            await save_and_publish_signal(redis, pool, sym, price, data)
+            signals_found += 1
+        elif data is not None:
+            movers.append(data)
 
     logger.info(f"Analysis complete: {len(symbols)} symbols checked, {signals_found} signals found")
 
