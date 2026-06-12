@@ -120,6 +120,32 @@ services:
       timeout: 10s
       retries: 3
 
+  notifier:
+    build:
+      context: .
+      dockerfile: services/notifier/Dockerfile
+    container_name: mexc_notifier
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=postgres
+      - MINIO_HOST=minio
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - mexc_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   redis_data:
   postgres_data:
