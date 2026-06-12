@@ -9,6 +9,6 @@ def get_redis_client() -> aioredis.Redis:
         db=settings.redis_db,
         password=settings.redis_password or None,
         decode_responses=True,
-        max_connections=50,
+        max_connections=200,
     )
     return aioredis.Redis(connection_pool=pool)

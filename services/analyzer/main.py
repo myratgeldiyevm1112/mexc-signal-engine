@@ -36,8 +36,8 @@ async def analyze_all_symbols(redis, pool) -> None:
             return None, (symbol, change_15m) if change_15m is not None else None
         return symbol, result
 
-    # Батчами по 200 чтобы не перегружать Redis
-    batch_size = 200
+    # Батчами по 50 чтобы не перегружать Redis
+    batch_size = 50
     results = []
     for i in range(0, len(symbols), batch_size):
         batch = symbols[i:i + batch_size]
