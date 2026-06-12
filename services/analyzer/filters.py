@@ -33,6 +33,39 @@ async def _get_price_15m_ago(redis: aioredis.Redis, symbol: str) -> float | None
     return json.loads(raw)["close"]
 
 
+async def get_change_15m(redis: aioredis.Redis, symbol: str) -> float | None:
+    """
+    Lightweight calculation of % price change over the last 15 minutes.
+    Used for debug "top movers" logging without computing RSI for every symbol.
+    Returns None if not enough data.
+    """
+    ready = await redis.get(READY_KEY.format(symbol=symbol))
+    if not ready:
+        return None
+
+    closes_15m = await _get_closes(redis, symbol, TF_15M)
+    if len(closes_15m) < 2:
+        return None
+
+    current_price = closes_15m[-1]
+    price_15m_ago = await _get_price_15m_ago(redis, symbol)
+    if not price_15m_ago or price_15m_ago == 0:
+        return None
+
+    return (current_price - price_15m_ago) / price_15m_ago * 100
+
+
+async def get_rsi_values(redis: aioredis.Redis, symbol: str) -> tuple[float | None, float | None]:
+    """Returns (rsi_1h, rsi_15m), either may be None if not enough data."""
+    closes_1h = await _get_closes(redis, symbol, TF_1H)
+    rsi_1h = calculate_rsi(closes_1h, settings.filter_rsi_period)
+
+    closes_15m = await _get_closes(redis, symbol, TF_15M)
+    rsi_15m = calculate_rsi(closes_15m, settings.filter_rsi_period)
+
+    return rsi_1h, rsi_15m
+
+
 async def check_filters(redis: aioredis.Redis, symbol: str) -> FilterResult | None:
     """
     Run all 3 filters for a symbol.
