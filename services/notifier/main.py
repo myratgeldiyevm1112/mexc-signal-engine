@@ -1,6 +1,6 @@
 import asyncio
 
-import redis.exceptions
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from aiogram import Bot
 from loguru import logger
 
@@ -95,7 +95,7 @@ async def main() -> None:
                     finally:
                         await redis.xack(STREAM_CHART_READY, CONSUMER_GROUP, msg_id)
 
-        except redis.exceptions.TimeoutError:
+        except RedisTimeoutError:
             # Expected when no messages arrive within block window; just retry.
             continue
         except Exception as e:
