@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-import redis.exceptions
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from loguru import logger
 
 from shared.config import settings
@@ -33,9 +33,8 @@ async def _ensure_consumer_group(redis) -> None:
 async def _get_candles_5m(redis, symbol: str) -> list[dict]:
     key = CANDLES_KEY.format(symbol=symbol, timeframe=TF_5M)
     raw = await redis.lrange(key, 0, -1)
+    # Redis buffer is RPUSH'd (oldest -> newest) -> already in correct order for chart
     candles = [json.loads(c) for c in raw]
-    # Redis buffer is LPUSH'd (newest first) -> reverse to oldest->newest for chart
-    candles.reverse()
     return candles
 
 
@@ -115,7 +114,7 @@ async def main() -> None:
                     finally:
                         await redis.xack(STREAM_SIGNALS, CONSUMER_GROUP, msg_id)
 
-        except redis.exceptions.TimeoutError:
+        except RedisTimeoutError:
             continue
         except Exception as e:
             logger.error(f"chart_builder loop error: {e}")
