@@ -1,4 +1,3 @@
-from shared.config import settings
 import asyncio
 import json
 import time
@@ -6,65 +5,61 @@ import websockets
 from loguru import logger
 
 from shared.config import settings
-from shared.constants import CANDLES_KEY, TF_1H, TF_15M, TF_5M
+from shared.constants import CANDLES_KEY, TF_1H, TF_15M, TF_5M, MEXC_INTERVAL_MAP
 from shared.redis_client import get_redis_client
 
-MEXC_WS_URL = "wss://wbs.mexc.com/ws"
-PING_INTERVAL = 30  # seconds
-RECONNECT_DELAY_BASE = 2  # seconds, doubles on each retry
-RECONNECT_DELAY_MAX = 60  # seconds
+MEXC_WS_URL = "wss://contract.mexc.com/edge"
+PING_INTERVAL = 15  # seconds
+RECONNECT_DELAY_BASE = 2
+RECONNECT_DELAY_MAX = 60
 
-
-def _build_subscribe_msg(symbols: list[str]) -> dict:
-    """Build MEXC WebSocket subscription message for kline streams."""
-    params = []
-    for symbol in symbols:
-        params.append(f"spot@public.kline.v3.api@{symbol}@Min1")
-        params.append(f"spot@public.kline.v3.api@{symbol}@Min5")
-        params.append(f"spot@public.kline.v3.api@{symbol}@Min15")
-        params.append(f"spot@public.kline.v3.api@{symbol}@Min60")
-    return {"method": "SUBSCRIPTION", "params": params}
-
-
-def _parse_kline_message(msg: dict) -> tuple[str, str, dict] | None:
-    """
-    Parse incoming kline message from MEXC WebSocket.
-    Returns (symbol, timeframe, candle_dict) or None if not a kline message.
-    """
-    channel = msg.get("c", "")
-    if not channel.startswith("spot@public.kline.v3.api"):
-        return None
-
-    data = msg.get("d", {})
-    k = data.get("k", {})
-    if not k:
-        return None
-
-    symbol = msg.get("s", "")
-    interval = k.get("i", "")
-
-    tf_map = {"Min1": "1m", "Min5": TF_5M, "Min15": TF_15M, "Min60": TF_1H}
-    timeframe = tf_map.get(interval)
-    if not timeframe:
-        return None
-
-    candle = {
-        "timestamp": int(k.get("t", 0)),
-        "open":      float(k.get("o", 0)),
-        "high":      float(k.get("h", 0)),
-        "low":       float(k.get("l", 0)),
-        "close":     float(k.get("c", 0)),
-        "volume":    float(k.get("v", 0)),
-    }
-    return symbol, timeframe, candle
-
+SUBSCRIBE_INTERVALS = [TF_5M, TF_15M, TF_1H]
+INTERVAL_TO_TF = {MEXC_INTERVAL_MAP[tf]: tf for tf in SUBSCRIBE_INTERVALS}
 
 BUFFER_SIZE_MAP = {
-    "1m":   200,
     TF_5M:  settings.candles_5min_buffer,
     TF_15M: settings.candles_15min_buffer,
     TF_1H:  settings.candles_1h_buffer,
 }
+
+
+def _build_subscribe_messages(symbols: list[str]) -> list[dict]:
+    """Build MEXC futures kline subscription messages (one per symbol/interval)."""
+    messages = []
+    for symbol in symbols:
+        for tf in SUBSCRIBE_INTERVALS:
+            interval = MEXC_INTERVAL_MAP[tf]
+            messages.append({
+                "method": "sub.kline",
+                "param": {"symbol": symbol, "interval": interval},
+            })
+    return messages
+
+
+def _parse_kline_message(msg: dict) -> tuple[str, str, dict] | None:
+    """Parse incoming kline push message from MEXC Futures WebSocket."""
+    if msg.get("channel") != "push.kline":
+        return None
+
+    data = msg.get("data", {})
+    if not data:
+        return None
+
+    symbol = data.get("symbol", "")
+    interval = data.get("interval", "")
+    timeframe = INTERVAL_TO_TF.get(interval)
+    if not timeframe:
+        return None
+
+    candle = {
+        "timestamp": int(data.get("t", 0)) * 1000,
+        "open":      float(data.get("o", 0)),
+        "high":      float(data.get("h", 0)),
+        "low":       float(data.get("l", 0)),
+        "close":     float(data.get("c", 0)),
+        "volume":    float(data.get("q", 0)),
+    }
+    return symbol, timeframe, candle
 
 
 async def _handle_connection(symbols: list[str], conn_id: int) -> None:
@@ -76,21 +71,25 @@ async def _handle_connection(symbols: list[str], conn_id: int) -> None:
         try:
             logger.info(f"[WS-{conn_id}] Connecting for {len(symbols)} symbols...")
             async with websockets.connect(MEXC_WS_URL, ping_interval=None) as ws:
-                # Subscribe to all symbols in this batch
-                await ws.send(json.dumps(_build_subscribe_msg(symbols)))
+                for sub_msg in _build_subscribe_messages(symbols):
+                    await ws.send(json.dumps(sub_msg))
+                    await asyncio.sleep(0.05)
+
                 logger.info(f"[WS-{conn_id}] Subscribed, listening...")
-                delay = RECONNECT_DELAY_BASE  # reset on success
+                delay = RECONNECT_DELAY_BASE
 
                 last_ping = time.time()
 
                 async for raw in ws:
-                    # Send ping periodically to keep connection alive
                     if time.time() - last_ping > PING_INTERVAL:
-                        await ws.send(json.dumps({"method": "PING"}))
+                        await ws.send(json.dumps({"method": "ping"}))
                         last_ping = time.time()
 
                     msg = json.loads(raw)
-                    logger.debug(f"[WS-{conn_id}] raw channel: {msg.get('c')}")
+
+                    if msg.get("channel") == "pong":
+                        continue
+
                     result = _parse_kline_message(msg)
                     if result is None:
                         continue
@@ -99,7 +98,18 @@ async def _handle_connection(symbols: list[str], conn_id: int) -> None:
                     buffer_size = BUFFER_SIZE_MAP.get(timeframe, 200)
                     redis_key = CANDLES_KEY.format(symbol=symbol, timeframe=timeframe)
 
-                    # Update candle buffer in Redis
+                    last_raw = await redis.lindex(redis_key, -1)
+                    if last_raw is not None:
+                        last_candle = json.loads(last_raw)
+                        if last_candle.get("timestamp") == candle["timestamp"]:
+                            # Same (still-open) candle — replace last entry instead of appending
+                            pipe = redis.pipeline()
+                            pipe.rpop(redis_key)
+                            pipe.rpush(redis_key, json.dumps(candle))
+                            pipe.ltrim(redis_key, -buffer_size, -1)
+                            await pipe.execute()
+                            continue
+
                     pipe = redis.pipeline()
                     pipe.rpush(redis_key, json.dumps(candle))
                     pipe.ltrim(redis_key, -buffer_size, -1)
@@ -115,10 +125,6 @@ async def _handle_connection(symbols: list[str], conn_id: int) -> None:
 
 
 async def run_websocket_manager(symbols: list[str]) -> None:
-    """
-    Launch multiple WebSocket connections to cover all symbols.
-    Each connection handles up to MEXC_SYMBOLS_PER_WS_CONNECTION symbols.
-    """
     batch_size = settings.mexc_symbols_per_ws_connection
     batches = [symbols[i:i + batch_size] for i in range(0, len(symbols), batch_size)]
     logger.info(f"Starting {len(batches)} WebSocket connections for {len(symbols)} symbols")

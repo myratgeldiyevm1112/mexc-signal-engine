@@ -22,7 +22,7 @@ TF_15M = "15m"
 TF_1H = "1h"
 
 MEXC_INTERVAL_MAP = {
-    TF_5M:  "5m",
-    TF_15M: "15m",
-    TF_1H:  "60m",
+    TF_5M:  "Min5",
+    TF_15M: "Min15",
+    TF_1H:  "Min60",
 }

@@ -29,7 +29,7 @@ async def main() -> None:
     logger.info(f"Loaded {len(symbols)} symbols, starting history load...")
 
     # Load historical candles into Redis
-    await load_all_history(symbols, redis, batch_size=20, delay_between_batches=2.0)
+    await load_all_history(symbols, redis, batch_size=5, delay_between_batches=1.0)
 
     logger.info("History loaded. Starting WebSocket manager...")
     await redis.aclose()
