@@ -97,6 +97,29 @@ services:
       timeout: 10s
       retries: 3
 
+  chart_builder:
+    build:
+      context: .
+      dockerfile: services/chart_builder/Dockerfile
+    container_name: mexc_chart_builder
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - REDIS_HOST=redis
+      - MINIO_HOST=minio
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - mexc_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   redis_data:
   postgres_data:
