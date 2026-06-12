@@ -1,6 +1,7 @@
 import asyncio
 import json
 
+import redis.exceptions
 from loguru import logger
 
 from shared.config import settings
@@ -114,6 +115,8 @@ async def main() -> None:
                     finally:
                         await redis.xack(STREAM_SIGNALS, CONSUMER_GROUP, msg_id)
 
+        except redis.exceptions.TimeoutError:
+            continue
         except Exception as e:
             logger.error(f"chart_builder loop error: {e}")
             await asyncio.sleep(5)
