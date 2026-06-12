@@ -31,7 +31,8 @@ def _parse_kline_message(msg: dict) -> tuple[str, str, dict] | None:
     Parse incoming kline message from MEXC WebSocket.
     Returns (symbol, timeframe, candle_dict) or None if not a kline message.
     """
-    if msg.get("c") != "spot@public.kline.v3.api":
+    channel = msg.get("c", "")
+    if not channel.startswith("spot@public.kline.v3.api"):
         return None
 
     data = msg.get("d", {})
@@ -89,6 +90,7 @@ async def _handle_connection(symbols: list[str], conn_id: int) -> None:
                         last_ping = time.time()
 
                     msg = json.loads(raw)
+                    logger.debug(f"[WS-{conn_id}] raw channel: {msg.get('c')}")
                     result = _parse_kline_message(msg)
                     if result is None:
                         continue
