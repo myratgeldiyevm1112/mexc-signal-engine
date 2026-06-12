@@ -78,11 +78,15 @@ async def main() -> None:
 
     logger.info("Running analysis every 60 seconds...")
     while True:
+        start = asyncio.get_event_loop().time()
         try:
             await analyze_all_symbols(redis, pool)
         except Exception as e:
             logger.error(f"Analysis cycle error: {e}")
-        await asyncio.sleep(60)
+        elapsed = asyncio.get_event_loop().time() - start
+        sleep_time = max(0, 60 - elapsed)
+        logger.debug(f"Cycle took {elapsed:.1f}s, sleeping {sleep_time:.1f}s")
+        await asyncio.sleep(sleep_time)
 
 
 if __name__ == "__main__":
