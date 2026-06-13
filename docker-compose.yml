@@ -49,7 +49,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      
+
   collector:
     build:
       context: .
@@ -68,6 +68,11 @@ services:
         condition: service_healthy
     networks:
       - mexc_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
       interval: 30s
@@ -91,6 +96,11 @@ services:
         condition: service_healthy
     networks:
       - mexc_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
       interval: 30s
@@ -114,6 +124,11 @@ services:
         condition: service_healthy
     networks:
       - mexc_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
       interval: 30s
@@ -140,6 +155,11 @@ services:
         condition: service_healthy
     networks:
       - mexc_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')"]
       interval: 30s
