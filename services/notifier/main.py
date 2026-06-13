@@ -1,4 +1,5 @@
 import asyncio
+import signal
 
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from aiogram import Bot
@@ -70,11 +71,20 @@ async def main() -> None:
     minio_client = get_minio_client()
     bot = Bot(token=settings.telegram_bot_token)
 
+    stop_event = asyncio.Event()
+
+    def _handle_sigterm():
+        logger.info("SIGTERM received, shutting down notifier...")
+        stop_event.set()
+
+    asyncio.get_event_loop().add_signal_handler(signal.SIGTERM, _handle_sigterm)
+    asyncio.get_event_loop().add_signal_handler(signal.SIGINT, _handle_sigterm)
+
     await _ensure_consumer_group(redis)
     await run_health_server(settings.notifier_health_port)
 
     logger.info(f"Listening on {STREAM_CHART_READY}...")
-    while True:
+    while not stop_event.is_set():
         try:
             resp = await redis.xreadgroup(
                 groupname=CONSUMER_GROUP,
@@ -85,7 +95,6 @@ async def main() -> None:
             )
             if not resp:
                 continue
-
             for _stream_name, messages in resp:
                 for msg_id, fields in messages:
                     try:
@@ -94,13 +103,16 @@ async def main() -> None:
                         logger.error(f"Error processing chart_ready message {msg_id}: {e}")
                     finally:
                         await redis.xack(STREAM_CHART_READY, CONSUMER_GROUP, msg_id)
-
         except RedisTimeoutError:
-            # Expected when no messages arrive within block window; just retry.
             continue
         except Exception as e:
             logger.error(f"notifier loop error: {e}")
             await asyncio.sleep(5)
+
+    await redis.aclose()
+    await pool.close()
+    await bot.session.close()
+    logger.info("Notifier stopped.")
 
 
 if __name__ == "__main__":

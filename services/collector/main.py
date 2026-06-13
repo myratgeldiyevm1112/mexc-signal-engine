@@ -1,4 +1,5 @@
 import asyncio
+import signal
 import time
 import aiohttp
 from loguru import logger
@@ -16,26 +17,38 @@ async def main() -> None:
     logger.info("Starting collector service...")
     redis = get_redis_client()
 
-    # Save bot start time for chart_builder to know how much data is available
-    await redis.set(BOT_START_TIME_KEY, int(time.time()))
+    stop_event = asyncio.Event()
 
-    # Start health server
+    def _handle_sigterm():
+        logger.info("SIGTERM received, shutting down collector...")
+        stop_event.set()
+
+    asyncio.get_event_loop().add_signal_handler(signal.SIGTERM, _handle_sigterm)
+    asyncio.get_event_loop().add_signal_handler(signal.SIGINT, _handle_sigterm)
+
+    await redis.set(BOT_START_TIME_KEY, int(time.time()))
     await run_health_server(settings.collector_health_port)
 
-    # Fetch all USDT symbols
     async with aiohttp.ClientSession() as session:
         symbols = await get_all_usdt_symbols(session)
 
     logger.info(f"Loaded {len(symbols)} symbols, starting history load...")
-
-    # Load historical candles into Redis
     await load_all_history(symbols, redis, batch_size=5, delay_between_batches=1.0)
 
     logger.info("History loaded. Starting WebSocket manager...")
     await redis.aclose()
 
-    # Start WebSocket connections (runs forever)
-    await run_websocket_manager(symbols)
+    ws_task = asyncio.create_task(run_websocket_manager(symbols))
+    await stop_event.wait()
+
+    logger.info("Stopping WebSocket manager...")
+    ws_task.cancel()
+    try:
+        await ws_task
+    except asyncio.CancelledError:
+        pass
+
+    logger.info("Collector stopped.")
 
 
 if __name__ == "__main__":

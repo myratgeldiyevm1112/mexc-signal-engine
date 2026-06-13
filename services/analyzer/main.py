@@ -1,6 +1,6 @@
 import asyncio
+import signal
 import json
-import asyncpg
 from loguru import logger
 
 from shared.config import settings
@@ -16,7 +16,6 @@ TOP_MOVERS_COUNT = 5
 
 
 async def analyze_all_symbols(redis, pool) -> None:
-    """Run filters for all symbols that have data in Redis."""
     keys = await redis.keys("ready:*")
     symbols = [k.replace("ready:", "") for k in keys]
 
@@ -36,7 +35,6 @@ async def analyze_all_symbols(redis, pool) -> None:
             return None, (symbol, change_15m) if change_15m is not None else None
         return symbol, result
 
-    # Батчами по 50 чтобы не перегружать Redis
     batch_size = 50
     results = []
     for i in range(0, len(symbols), batch_size):
@@ -59,18 +57,15 @@ async def analyze_all_symbols(redis, pool) -> None:
 
     logger.info(f"Analysis complete: {len(symbols)} symbols checked, {signals_found} signals found")
 
-    # Debug: log top movers by |change_15m| with their RSI values
     if movers:
         movers.sort(key=lambda m: abs(m[1]), reverse=True)
         top = movers[:TOP_MOVERS_COUNT]
-
         parts = []
         for symbol, change_15m in top:
             rsi_1h, rsi_15m = await get_rsi_values(redis, symbol)
             rsi_1h_str = f"{rsi_1h:.1f}" if rsi_1h is not None else "n/a"
             rsi_15m_str = f"{rsi_15m:.1f}" if rsi_15m is not None else "n/a"
             parts.append(f"{symbol} {change_15m:+.2f}% (RSI1h={rsi_1h_str}, RSI15m={rsi_15m_str})")
-
         logger.info("Top movers: " + " | ".join(parts))
 
 
@@ -80,10 +75,19 @@ async def main() -> None:
     redis = get_redis_client()
     pool = await get_postgres_pool()
 
+    stop_event = asyncio.Event()
+
+    def _handle_sigterm():
+        logger.info("SIGTERM received, shutting down analyzer...")
+        stop_event.set()
+
+    asyncio.get_event_loop().add_signal_handler(signal.SIGTERM, _handle_sigterm)
+    asyncio.get_event_loop().add_signal_handler(signal.SIGINT, _handle_sigterm)
+
     await run_health_server(settings.analyzer_health_port)
 
     logger.info("Running analysis every 60 seconds...")
-    while True:
+    while not stop_event.is_set():
         start = asyncio.get_event_loop().time()
         try:
             await analyze_all_symbols(redis, pool)
@@ -92,7 +96,14 @@ async def main() -> None:
         elapsed = asyncio.get_event_loop().time() - start
         sleep_time = max(0, 60 - elapsed)
         logger.debug(f"Cycle took {elapsed:.1f}s, sleeping {sleep_time:.1f}s")
-        await asyncio.sleep(sleep_time)
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=sleep_time)
+        except asyncio.TimeoutError:
+            pass
+
+    await redis.aclose()
+    await pool.close()
+    logger.info("Analyzer stopped.")
 
 
 if __name__ == "__main__":
