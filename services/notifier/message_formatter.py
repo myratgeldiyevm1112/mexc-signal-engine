@@ -1,8 +1,3 @@
-"""
-services/notifier/message_formatter.py
-Formats the Telegram caption text for a trading signal.
-"""
-
 from datetime import datetime, timezone
 
 
@@ -16,8 +11,8 @@ def format_signal_message(
 ) -> str:
     emoji = "🚀" if direction == "LONG" else "🔻"
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    mexc_url = f"https://www.mexc.com/exchange/{symbol[:-4]}_{symbol[-4:]}" if symbol.endswith("USDT") else f"https://www.mexc.com/exchange/{symbol}"
-
+    # Futures symbol format: BTC_USDT → MEXC URL: BTC_USDT (futures perpetual)
+    mexc_url = f"https://futures.mexc.com/exchange/{symbol}"
     return (
         f"{emoji} <b>{direction} SIGNAL — {symbol}</b>\n\n"
         f"📊 Изменение 15m : <b>{change_15m:+.2f}%</b>\n"
@@ -25,7 +20,7 @@ def format_signal_message(
         f"📈 RSI 15m       : <b>{rsi_15m:.1f}</b>\n\n"
         f"💰 Цена          : <code>{_fmt_price(price)}</code> USDT\n"
         f"📅 Время         : {now}\n\n"
-        f'🔗 <a href="{mexc_url}">Открыть пару на MEXC</a>'
+        f'🔗 <a href="{mexc_url}">Открыть пару на MEXC Futures</a>'
     )
 
 
