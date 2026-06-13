@@ -166,6 +166,32 @@ services:
       timeout: 10s
       retries: 3
 
+  watchdog:
+    build:
+      context: .
+      dockerfile: services/watchdog/Dockerfile
+    container_name: mexc_watchdog
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - REDIS_HOST=redis
+    depends_on:
+      collector:
+        condition: service_healthy
+      analyzer:
+        condition: service_healthy
+      chart_builder:
+        condition: service_healthy
+      notifier:
+        condition: service_healthy
+    networks:
+      - mexc_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
 volumes:
   redis_data:
   postgres_data:
