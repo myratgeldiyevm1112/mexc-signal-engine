@@ -25,3 +25,4 @@ docker-compose.override.yml
 # Backtester
 backtester/results.csv
 backtester/data/
+backtester/mm_results.csv

@@ -14,6 +14,7 @@ MEXC_FUTURES_REST_URL = "https://contract.mexc.com"
 DATA_DIR = Path("backtester/data")
 
 INTERVALS = {
+    "5m":  "Min5",
     "15m": "Min15",
     "1h":  "Min60",
 }
