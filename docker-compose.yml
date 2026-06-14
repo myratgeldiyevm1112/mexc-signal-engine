@@ -5,7 +5,7 @@ services:
     container_name: mexc_redis
     restart: unless-stopped
     volumes:
-      - redis_data:/data
+      - mexc_redis_data:/data
     networks:
       - mexc_network
     healthcheck:
@@ -23,7 +23,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mexc_postgres_data:/var/lib/postgresql/data
     networks:
       - mexc_network
     healthcheck:
@@ -40,7 +40,7 @@ services:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
     volumes:
-      - minio_data:/data
+      - mexc_minio_data:/data
     networks:
       - mexc_network
     command: server /data --console-address ":9001"
@@ -193,9 +193,9 @@ services:
         max-file: "3"
 
 volumes:
-  redis_data:
-  postgres_data:
-  minio_data:
+  mexc_redis_data:
+  mexc_postgres_data:
+  mexc_minio_data:
 
 networks:
   mexc_network:
