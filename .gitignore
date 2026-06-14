@@ -21,3 +21,7 @@ data/
 
 # Docker
 docker-compose.override.yml
+
+# Backtester
+backtester/results.csv
+backtester/data/
