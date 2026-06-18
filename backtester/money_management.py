@@ -146,7 +146,7 @@ def simulate(df: pd.DataFrame) -> MMReport:
             break
 
         entry_price = float(row["entry_price"])
-        change_15m  = float(row["change_15m"])   # % (positive for LONG, negative for SHORT in raw data)
+        change_15m  = float(row["change_pct"])   # % (positive for LONG, negative for SHORT in raw data)
         direction   = row["direction"]
 
         # ── Stake & position ────────────────────────────
