@@ -7,14 +7,16 @@ from shared.config import settings
 from shared.constants import CANDLES_KEY, READY_KEY, TF_1H, TF_15M
 from services.analyzer.rsi_calculator import calculate_rsi
 
+from services.analyzer.divergence import detect_divergence, DivergenceResult
 
 @dataclass
 class FilterResult:
     passed: bool
-    direction: str | None  # "LONG", "SHORT", or None
+    direction: str | None
     change_15m: float
     rsi_1h: float
     rsi_15m: float
+    divergence: DivergenceResult | None = None
 
 
 async def _get_closes(redis: aioredis.Redis, symbol: str, timeframe: str) -> list[float]:
@@ -105,6 +107,9 @@ async def check_filters(redis: aioredis.Redis, symbol: str) -> FilterResult | No
 
     overbought = settings.filter_rsi_overbought
     oversold = settings.filter_rsi_oversold
+
+    from services.analyzer.divergence import detect_divergence
+    divergence = detect_divergence(closes_15m)
 
     # Check LONG: price up + both RSI overbought
     if change_15m >= threshold and rsi_1h > overbought and rsi_15m > overbought:

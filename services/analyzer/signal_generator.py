@@ -48,4 +48,7 @@ async def save_and_publish_signal(
         "change_15m": str(round(result.change_15m, 4)),
         "rsi_1h": str(round(result.rsi_1h, 2)),
         "rsi_15m": str(round(result.rsi_15m, 2)),
+        "divergence_kind": result.divergence.kind or "" if result.divergence else "",
+        "divergence_strength": str(round(result.divergence.strength, 2)) if result.divergence else "0",
+        "divergence_desc": result.divergence.description if result.divergence else "",
     })

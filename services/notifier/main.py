@@ -48,6 +48,9 @@ async def _process_message(bot: Bot, minio_client, pool, fields: dict) -> None:
         change_15m=change_15m,
         rsi_1h=rsi_1h,
         rsi_15m=rsi_15m,
+        divergence_kind=fields.get("divergence_kind", ""),
+        divergence_strength=float(fields.get("divergence_strength", 0)),
+        divergence_desc=fields.get("divergence_desc", ""),
     )
 
     msg_id = await send_signal_photo(bot, png_bytes, caption, symbol)
