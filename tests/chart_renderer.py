@@ -58,11 +58,10 @@ def render_chart(
     rsi_full = ta.rsi(all_closes, length=RSI_PERIOD)
     rsi_series = rsi_full.to_numpy()[-n:] if rsi_full is not None else np.full(n, np.nan)
 
-    # Top-5 max volume average over last VOLUME_LOOKBACK candles (flat reference line)
-    vol_lookback = np.array(
-        [c["volume"] for c in candles_5m[-VOLUME_LOOKBACK:]], dtype=float
-    )
-    top5_avg_volume = _top5_avg_volume(vol_lookback)
+    # Rolling top-5 avg volume line
+    all_vols_full = np.array([c["volume"] for c in candles_5m], dtype=float)
+    display_start_idx = max(0, len(candles_5m) - CANDLES_12H)
+    rolling_top5 = _rolling_top5_avg(all_vols_full, display_start_idx, lookback=VOLUME_LOOKBACK)
 
     x = np.arange(n)
 
@@ -153,11 +152,11 @@ def render_chart(
     vcols = [vol_bull if closes[i] >= opens[i] else vol_bear for i in range(n)]
     ax_vol.bar(x, vols, color=vcols, width=0.6, alpha=0.9, zorder=2)
 
-    rolling_avg = np.full(n, top5_avg_volume)
+    last_avg = rolling_top5[-1] if not np.isnan(rolling_top5[-1]) else 0.0
     ax_vol.plot(
-        x, rolling_avg,
+        x, rolling_top5,
         color=avg_color, linewidth=1.3, linestyle="-", zorder=3,
-        label=f"Top-5 avg vol (200)  {_fmt_vol(top5_avg_volume)}",
+        label=f"Top-5 avg vol (200)  {_fmt_vol(last_avg)}",
     )
 
     ax_vol.set_ylabel("Объём", color=text_color, fontsize=9)
@@ -185,12 +184,25 @@ def render_chart(
 # HELPERS
 # ============================================================
 
-def _top5_avg_volume(vols: np.ndarray) -> float:
-    if len(vols) == 0:
-        return 0.0
-    k = min(5, len(vols))
-    top5 = np.partition(vols, -k)[-k:]
-    return float(np.mean(top5))
+def _rolling_top5_avg(all_vols: np.ndarray, display_start_idx: int, lookback: int = 200) -> np.ndarray:
+    """
+    For each candle in display window, compute avg of top-5 max volumes
+    from the previous `lookback` candles. Returns rolling line array.
+    """
+    n_display = len(all_vols) - display_start_idx
+    result = np.full(n_display, np.nan)
+
+    for i in range(n_display):
+        global_idx = display_start_idx + i
+        start = max(0, global_idx - lookback)
+        window = all_vols[start:global_idx + 1]
+        if len(window) == 0:
+            continue
+        k = min(5, len(window))
+        top5 = np.partition(window, -k)[-k:]
+        result[i] = float(np.mean(top5))
+
+    return result
 
 
 def _make_time_labels(candles: List[Dict], max_labels: int = 9):
